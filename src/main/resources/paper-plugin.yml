@@ -1,0 +1,7 @@
+name: Swiftrun
+version: '1.0-SNAPSHOT'
+main: me.lukiiy.swiftrun.Swiftrun
+api-version: '1.21'
+authors: [Lukiiy]
+description: SPEEDRUNS?!
+folia-supported: true
