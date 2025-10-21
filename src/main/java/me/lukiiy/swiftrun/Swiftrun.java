@@ -1,9 +1,12 @@
 package me.lukiiy.swiftrun;
 
+import com.viaversion.viaversion.api.Via;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.JoinConfiguration;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.ShadowColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -12,21 +15,22 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scoreboard.*;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public final class Swiftrun extends JavaPlugin {
     private final Map<Player, RunData> runMap = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> protocolCache = new ConcurrentHashMap<>();
+
     private ScheduledTask mainTask;
     private RunState state = RunState.INACTIVE;
     private long startTime = 0;
@@ -49,51 +53,85 @@ public final class Swiftrun extends JavaPlugin {
         runMap.clear();
 
         startTime = System.currentTimeMillis();
-        Scoreboard board = setupBoard();
 
         for (Player p : players) {
             if (p == null) continue;
 
             runMap.put(p, new RunData());
-            p.setScoreboard(board);
         }
 
-        mainTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> {
-            runMap.keySet().forEach(runner -> runner.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " •").shadowColor(ShadowColor.shadowColor(255, 255, 0, 128))));
-        }, 1L, 20L);
+        AtomicInteger displayIdx = new AtomicInteger();
+        AtomicLong lastSwitch = new AtomicLong();
+
+        mainTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> runMap.keySet().forEach(runner -> {
+            List<Player> others = runMap.keySet().stream().filter(Player::isOnline).toList();
+            if (others.isEmpty()) return;
+
+            long now = System.currentTimeMillis();
+            if (now - lastSwitch.get() >= 6000) { // 3s
+                displayIdx.set((displayIdx.get() + 1) % others.size());
+                lastSwitch.set(now);
+            }
+
+            Player current = others.get(displayIdx.get());
+
+            for (Player viewer : others) {
+                if (!viewer.isOnline()) continue;
+
+                RunData data = runMap.get(current);
+                if (data == null) continue;
+
+                Component formattedCurrent = getProtocol(viewer) >= 773 ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
+                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(Component.text(data.boardAct).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
+            }
+        }), 1L, 20L);
 
         Bukkit.broadcast(Component.text("The run has started!").color(NamedTextColor.YELLOW));
     }
 
     public void stopRun(Player winner) {
-        if (state != RunState.INACTIVE) return;
-        String time = getFormattedTime(System.currentTimeMillis() - startTime);
+        if (state == RunState.INACTIVE) return;
+        String time = getFormattedTime(startTime);
 
         mainTask.cancel();
-        if (winner != null && runMap.containsKey(winner)) {
+        Bukkit.broadcast(Component.text("The run has ended!").color(NamedTextColor.YELLOW).append(Component.text(" Global final time: ").append(Component.text(time).color(NamedTextColor.YELLOW))));
 
+        if (winner != null && runMap.containsKey(winner)) {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 NamedTextColor color = (p.equals(winner) || !runMap.containsKey(p)) ? NamedTextColor.YELLOW : NamedTextColor.RED;
 
-                p.showTitle(Title.title(Component.text("Run Over!").color(color).decorate(TextDecoration.BOLD), Component.text("Winner: ").color(color).append(winner.displayName()).append(Component.text("! ")).append(Component.text(time).color(color)), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(500))));
+                p.showTitle(Title.title(Component.text("Game Over!").color(color).decorate(TextDecoration.BOLD), Component.text("Winner: ").append(winner.displayName().color(color)).appendSpace().append(Component.text("(" + time + ")")), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(500))));
             }
         }
 
+        Bukkit.broadcast(Component.empty().appendNewline().append(Component.text("ʜᴏᴠᴇʀ ᴛʜᴇ ᴘʟᴀʏᴇʀѕ ᴛᴏ ᴄʜᴇᴄᴋ ᴛʜᴇɪʀ ᴛɪᴍᴇѕ").color(NamedTextColor.YELLOW)));
+
+        List<Component> standing = new ArrayList<>();
         for (Player p : Bukkit.getOnlinePlayers()) {
             p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
 
             RunData data = runMap.get(p);
             if (data == null) return;
 
-            // TODO: formatted msg
-            p.sendMessage(Component.text("Your final time: " + time));
-            p.sendMessage(Component.text("Nether time: " + getFormattedTime(data.netherTime)));
-            p.sendMessage(Component.text("Bastion time: " + getFormattedTime(data.bastionTime)));
-            p.sendMessage(Component.text("Stronghold time: " + getFormattedTime(data.strongholdTime)));
-            p.sendMessage(Component.text("End time: " + getFormattedTime(data.endTime)));
+            p.setGameMode(GameMode.SPECTATOR);
+
+            Component display = Component.object(ObjectContents.playerHead(p.getUniqueId())).appendSpace().append(p.displayName());
+            if (winner == p) display = Component.empty().append(Component.text("✦ ").color(NamedTextColor.AQUA)).append(display).append(Component.text(" ✦").color(NamedTextColor.AQUA));
+
+            Map<String, String> times = new LinkedHashMap<>();
+            times.put("Nether", getFormattedTime(data.netherTime));
+            times.put("Bastion", getFormattedTime(data.bastionTime));
+            times.put("Stronghold", getFormattedTime(data.strongholdTime));
+            times.put("End", getFormattedTime(data.endTime));
+
+            List<Component> hoverLines = times.entrySet().stream().map(entry -> Component.text(entry.getKey() + " @ ").color(NamedTextColor.WHITE).append(Component.text(entry.getValue()).color(NamedTextColor.YELLOW))).collect(Collectors.toList());
+            hoverLines.add(Component.empty());
+            hoverLines.add(Component.text("Click to copy!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC));
+
+            standing.add(display.hoverEvent(HoverEvent.showText(Component.join(JoinConfiguration.separator(Component.newline()), hoverLines))).clickEvent(ClickEvent.copyToClipboard(times.entrySet().stream().map(e -> e.getKey() + " @ " + e.getValue()).collect(Collectors.joining("; ")))));
         }
 
-        Bukkit.broadcast(Component.text("The run has ended!").color(NamedTextColor.YELLOW));
+        Bukkit.broadcast(Component.join(JoinConfiguration.builder().separator(Component.newline()).build(), standing).appendNewline());
         runMap.clear();
     }
 
@@ -128,70 +166,37 @@ public final class Swiftrun extends JavaPlugin {
         return startTime;
     }
 
-    private Scoreboard setupBoard() {
-        ScoreboardManager manager = Bukkit.getScoreboardManager();
-        Scoreboard board = manager.getNewScoreboard();
-        Objective obj = board.registerNewObjective("run", Criteria.DUMMY, Component.text("Run").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
-
-        obj.setDisplaySlot(DisplaySlot.SIDEBAR);
-        obj.numberFormat(NumberFormat.blank());
-        return board;
-    }
-
-    public void updateBoards() {
-        runMap.keySet().forEach(runner -> {
-            Scoreboard board = runner.getScoreboard();
-            Objective obj = board.getObjective("run");
-            if (obj == null) return;
-
-            board.getEntries().forEach(board::resetScores);
-            AtomicInteger line = new AtomicInteger(15);
-
-            Score empty = obj.getScore("empty");
-            empty.setScore(line.getAndDecrement());
-            empty.customName(Component.empty());
-
-            List<Player> players = runMap.keySet().stream().filter(Player::isOnline).toList();
-
-            players.forEach(other -> {
-                if (!other.isOnline()) return;
-
-                RunData data = runMap.get(other);
-                if (data == null) return;
-
-                Component name = other.displayName();
-                UUID uuid = other.getUniqueId();
-                if (other.getProtocolVersion() >= 773) name = Component.object(ObjectContents.playerHead(uuid)).appendSpace().append(name);
-
-                Score displayName = obj.getScore(uuid + "1");
-                displayName.setScore(line.getAndDecrement());
-                displayName.customName(name);
-
-                Score displayAction = obj.getScore(uuid + "2");
-                displayAction.setScore(line.getAndDecrement());
-                displayAction.customName(Component.text("└ ").append(Component.text(data.boardAct).color(TextColor.color(0xD0D0D0))));
-
-                if (players.size() > 1) {
-                    Score spacer = obj.getScore(uuid + "space");
-                    spacer.setScore(line.getAndDecrement());
-                    spacer.customName(Component.empty());
-                }
-            });
-        });
-    }
-
     public String getFormattedTime(long time) {
         if (time == 0) return "0:00";
 
         long elapsed = System.currentTimeMillis() - time;
-        long seconds = elapsed / 1000;
-        long minutes = seconds / 60;
-        seconds %= 60;
+        long totalSeconds = elapsed / 1000;
 
-        return String.format("%d:%02d", minutes, seconds);
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+
+        if (hours > 0) return String.format("%d:%02d:%02d", hours, minutes, seconds);
+        else return String.format("%d:%02d", minutes, seconds);
     }
+
 
     public void sendTipMsg(Player p, String msg) {
         p.sendMessage(Component.empty().append(Component.text("[Debug]:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD)).appendSpace().append(MiniMessage.miniMessage().deserialize(msg)));
+    }
+
+    public int getProtocol(Player player) {
+        return protocolCache.computeIfAbsent(player.getUniqueId(), id -> {
+            try {
+                return Via.getAPI().getPlayerVersion(id);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return player.getProtocolVersion();
+            }
+        });
+    }
+
+    public void resetProtocol(Player player) {
+        protocolCache.remove(player.getUniqueId());
     }
 }

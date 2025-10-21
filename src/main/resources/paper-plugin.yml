@@ -5,3 +5,7 @@ api-version: '1.21'
 authors: [Lukiiy]
 description: SPEEDRUNS?!
 folia-supported: true
+dependencies:
+  server:
+    ViaVersion:
+      required: false

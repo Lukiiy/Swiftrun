@@ -8,7 +8,7 @@ public class RunData {
 
     public String boardAct = "Started";
 
-    public String serialize() { // TODO: save start time
+    public String serialize() {
         return netherTime + ";" + bastionTime + ";" + strongholdTime + ";" + endTime + ";" + boardAct;
     }
 

@@ -1,14 +1,24 @@
 package me.lukiiy.swiftrun;
 
 import net.kyori.adventure.text.Component;
-import org.bukkit.Location;
+import org.bukkit.*;
+import org.bukkit.block.BlockState;
 import org.bukkit.entity.EnderSignal;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityPortalEnterEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.world.AsyncStructureGenerateEvent;
+import org.bukkit.generator.LimitedRegion;
+import org.bukkit.generator.structure.Structure;
 import org.bukkit.generator.structure.StructureType;
+import org.bukkit.util.BlockTransformer;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.StructureSearchResult;
 import org.bukkit.util.Vector;
 
@@ -56,8 +66,6 @@ public class Listen implements Listener {
                 data.boardAct = "In The End";
             }
         }
-
-        Swiftrun.getInstance().updateBoards();
     }
 
     @EventHandler
@@ -106,6 +114,22 @@ public class Listen implements Listener {
                     if (!signal.isValid()) task.cancel();
                 }, null, 1L, 10L);
             }, null, 1L);
+        }
+    }
+
+    @EventHandler
+    public void quit(PlayerQuitEvent e) {
+        Swiftrun.getInstance().resetProtocol(e.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void portal(EntityPortalEnterEvent e) {
+        if (!(e.getEntity() instanceof Player p) || Swiftrun.getInstance().getState() == RunState.INACTIVE || !Swiftrun.getInstance().getRunMap().containsKey(p)) return;
+        Location loc = e.getLocation();
+
+        if (e.getPortalType() == PortalType.ENDER && loc.getWorld().getEnvironment() == World.Environment.THE_END) {
+            Swiftrun.getInstance().stopRun(p);
+            p.teleportAsync(loc);
         }
     }
 
