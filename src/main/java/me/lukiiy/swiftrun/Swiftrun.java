@@ -16,6 +16,7 @@ import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.ServerTickManager;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -39,9 +40,7 @@ public final class Swiftrun extends JavaPlugin {
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new Listen(), this);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-            event.registrar().register("run", new Cmd());
-        });
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("run", new Cmd()));
     }
 
     public static Swiftrun getInstance() {
@@ -57,7 +56,7 @@ public final class Swiftrun extends JavaPlugin {
         for (Player p : players) {
             if (p == null) continue;
 
-            runMap.put(p, new RunData());
+            join(p);
         }
 
         AtomicInteger displayIdx = new AtomicInteger();
@@ -91,6 +90,8 @@ public final class Swiftrun extends JavaPlugin {
 
     public void stopRun(Player winner) {
         if (state == RunState.INACTIVE) return;
+        if (state == RunState.PAUSED) togglePause();
+
         String time = getFormattedTime(startTime);
 
         mainTask.cancel();
@@ -137,21 +138,33 @@ public final class Swiftrun extends JavaPlugin {
 
     public void togglePause() {
         if (state == RunState.INACTIVE) return;
-
         String title;
+        ServerTickManager tick = Bukkit.getServerTickManager();
 
         if (state == RunState.ACTIVE) {
             state = RunState.PAUSED;
             title = "Paused";
+            tick.setFrozen(true);
         } else {
             state = RunState.ACTIVE;
             title = "Resumed";
+            tick.setFrozen(false);
         }
 
         Bukkit.getOnlinePlayers().forEach(p -> {
             p.showTitle(Title.title(Component.empty(), Component.text(title).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(2), Duration.ofMillis(500))));
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
         });
+    }
+
+    public void join(Player player) {
+        runMap.put(player, new RunData());
+    }
+
+    public void leave(Player player) {
+        runMap.remove(player);
+
+        if (state != RunState.INACTIVE && runMap.size() == 1) stopRun(runMap.keySet().iterator().next());
     }
 
     public Map<Player, RunData> getRunMap() {
@@ -189,8 +202,7 @@ public final class Swiftrun extends JavaPlugin {
         return protocolCache.computeIfAbsent(player.getUniqueId(), id -> {
             try {
                 return Via.getAPI().getPlayerVersion(id);
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
                 return player.getProtocolVersion();
             }
         });
