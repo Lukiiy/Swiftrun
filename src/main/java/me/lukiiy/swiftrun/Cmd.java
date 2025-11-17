@@ -14,13 +14,63 @@ import java.util.Collection;
 import java.util.List;
 
 public class Cmd implements BasicCommand {
-    private static final Component NO_RUN = Component.text("No active run!").color(NamedTextColor.RED);
     private static final Component INVALID_ARG = Component.text("Invalid subcommand.").color(NamedTextColor.RED);
+    private static final Component NO_RUN = Component.text("No active run!").color(NamedTextColor.RED);
+    private static final Component ONGOING_RUN = Component.text("There's an ongoing run!").color(NamedTextColor.RED);
+    private static final Component NOT_PARTICIPATING = Component.text("You are not in a run.").color(NamedTextColor.RED);
+    private static final Component INGAME_USAGE = Component.text("This subcommand can only be used in-game!").color(NamedTextColor.RED);
 
     @Override
     public void execute(CommandSourceStack stack, String[] args) { // TODO: Add draw, seed change & forfeit
         CommandSender sender = stack.getSender();
         RunState state = Swiftrun.getInstance().getState();
+
+        switch (args[0].toLowerCase()) {
+            case "draw" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(INGAME_USAGE);
+                    return;
+                }
+
+                if (Swiftrun.getInstance().getState() == RunState.INACTIVE) {
+                    sender.sendMessage(NO_RUN);
+                    return;
+                }
+
+                if (Swiftrun.getInstance().getRunMap().containsKey(p)) {
+                    sender.sendMessage(NOT_PARTICIPATING);
+                    return;
+                }
+
+                Bukkit.broadcast(Component.empty().append(p.displayName()).append(Component.text(" has voted for a draw.").color(NamedTextColor.YELLOW)));
+                Swiftrun.getInstance().drawVote(p);
+                return;
+            }
+
+            case "forfeit" -> {
+                if (!(sender instanceof Player p)) {
+                    sender.sendMessage(INGAME_USAGE);
+                    return;
+                }
+
+                if (Swiftrun.getInstance().getState() == RunState.INACTIVE) {
+                    sender.sendMessage(NO_RUN);
+                    return;
+                }
+
+                if (Swiftrun.getInstance().getRunMap().containsKey(p)) {
+                    sender.sendMessage(NOT_PARTICIPATING);
+                    return;
+                }
+
+                Bukkit.broadcast(Component.empty().append(p.displayName()).append(Component.text(" has forfeited!")));
+                Swiftrun.getInstance().leave(p);
+                p.setHealth(0);
+                return;
+            }
+
+            default -> sender.sendMessage(INVALID_ARG);
+        }
 
         if (!sender.hasPermission("swiftrun.admin")) {
             sender.sendMessage(INVALID_ARG);
@@ -39,10 +89,7 @@ public class Cmd implements BasicCommand {
                 for (int i = 1; i < args.length; i++) {
                     Player p = Bukkit.getPlayer(args[i]);
 
-                    if (p != null && p.isOnline()) {
-                        players.add(p);
-                        Bukkit.broadcast(p.displayName().append(Component.text(" " + Swiftrun.getInstance().getProtocol(p))));
-                    }
+                    if (p != null && p.isOnline()) players.add(p);
                     else sender.sendMessage(Component.text("Player not found: " + args[i]).color(NamedTextColor.RED));
                 }
 
@@ -82,6 +129,7 @@ public class Cmd implements BasicCommand {
                 }
 
                 Swiftrun.getInstance().togglePause();
+                sender.sendMessage(Component.text("Pausing...").color(NamedTextColor.YELLOW));
             }
 
             default -> sender.sendMessage(INVALID_ARG);

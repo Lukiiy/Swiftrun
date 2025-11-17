@@ -2,11 +2,13 @@ package me.lukiiy.swiftrun;
 
 import net.kyori.adventure.text.Component;
 import org.bukkit.*;
+import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.EnderSignal;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EnderDragonChangePhaseEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPortalEnterEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
@@ -112,7 +114,7 @@ public class Listen implements Listener {
 
         if (e.getPortalType() == PortalType.ENDER && loc.getWorld().getEnvironment() == World.Environment.THE_END) {
             Swiftrun.getInstance().stopRun(p);
-            p.teleportAsync(loc);
+            e.setCancelled(true);
         }
     }
 
@@ -129,5 +131,15 @@ public class Listen implements Listener {
     @EventHandler
     public void kick(PlayerKickEvent e) {
         if (Swiftrun.getInstance().getState() == RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) e.setCancelled(true);
+    }
+
+    @EventHandler
+    public void dragonPhase(EnderDragonChangePhaseEvent e) {
+        if (Swiftrun.getInstance().getState() != RunState.ACTIVE || e.getCurrentPhase() != EnderDragon.Phase.FLY_TO_PORTAL) return;
+
+        Bukkit.getOnlinePlayers().forEach(p -> {
+            if (Swiftrun.getInstance().getRunMap().containsKey(p) || !p.hasPermission("swiftrun.dragon")) return;
+            p.sendMessage(Component.translatable("entity.minecraft.ender_dragon", "Ender Dragon").append(Component.text(" is now perching!")));
+        });
     }
 }

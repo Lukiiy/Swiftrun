@@ -14,10 +14,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.title.Title;
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
-import org.bukkit.ServerTickManager;
-import org.bukkit.Sound;
+import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -31,10 +28,15 @@ import java.util.stream.Collectors;
 public final class Swiftrun extends JavaPlugin {
     private final Map<Player, RunData> runMap = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> protocolCache = new ConcurrentHashMap<>();
+    private final Set<Player> drawVoted = new HashSet<>();
 
+    private ScheduledTask voteTask;
     private ScheduledTask mainTask;
     private RunState state = RunState.INACTIVE;
+
     private long startTime = 0;
+    private long voteTime = 15;
+    private float votesPercentage = 1f;
 
     @Override
     public void onEnable() {
@@ -89,12 +91,14 @@ public final class Swiftrun extends JavaPlugin {
     }
 
     public void stopRun(Player winner) {
-        if (state == RunState.INACTIVE) return;
+        if (state == RunState.INACTIVE || mainTask.isCancelled()) return;
         if (state == RunState.PAUSED) togglePause();
 
         String time = getFormattedTime(startTime);
 
         mainTask.cancel();
+        if (voteTask != null && !voteTask.isCancelled()) voteTask.cancel();
+
         Bukkit.broadcast(Component.text("The run has ended!").color(NamedTextColor.YELLOW).append(Component.text(" Global final time: ").append(Component.text(time).color(NamedTextColor.YELLOW))));
 
         if (winner != null && runMap.containsKey(winner)) {
@@ -138,6 +142,7 @@ public final class Swiftrun extends JavaPlugin {
 
     public void togglePause() {
         if (state == RunState.INACTIVE) return;
+
         String title;
         ServerTickManager tick = Bukkit.getServerTickManager();
 
@@ -155,6 +160,35 @@ public final class Swiftrun extends JavaPlugin {
             p.showTitle(Title.title(Component.empty(), Component.text(title).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(2), Duration.ofMillis(500))));
             p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
         });
+    }
+
+    public void drawVote(Player player) {
+        if (state == RunState.INACTIVE) return;
+
+        drawVoted.add(player);
+        if (voteTask != null && !voteTask.isCancelled()) voteTask.cancel();
+
+        Set<Player> participants = runMap.keySet().stream().filter(Player::isOnline).collect(Collectors.toSet());
+        if (!participants.isEmpty()) {
+            long matches = participants.stream().filter(drawVoted::contains).count();
+            double ratio = (double) matches / participants.size();
+
+            if (ratio >= votesPercentage) {
+                Bukkit.broadcast(Component.text("Enough participants have voted for a draw.").color(NamedTextColor.RED));
+                stopRun(null);
+                return;
+            }
+        }
+
+        voteTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> {
+            voteTime--;
+
+            if (voteTime <= 0) {
+                drawVoted.clear();
+                Bukkit.broadcast(Component.text("The draw vote has expired.").color(NamedTextColor.YELLOW));
+                task.cancel();
+            }
+        }, 1, 20);
     }
 
     public void join(Player player) {
