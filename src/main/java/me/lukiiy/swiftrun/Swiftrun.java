@@ -3,6 +3,7 @@ package me.lukiiy.swiftrun;
 import com.viaversion.viaversion.api.Via;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -11,7 +12,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.ShadowColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.title.Title;
 import org.bukkit.*;
@@ -38,9 +38,12 @@ public final class Swiftrun extends JavaPlugin {
     private long voteTime = 15;
     private float votesPercentage = 1f;
 
+    private static final Component RUN_USEFUL = Component.text("[Run]:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD);
+
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new Listen(), this);
+        if (isFolia()) getServer().getPluginManager().registerEvents(new FoliaListen(), this);
 
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("run", new Cmd()));
     }
@@ -65,8 +68,9 @@ public final class Swiftrun extends JavaPlugin {
         AtomicLong lastSwitch = new AtomicLong();
 
         mainTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> runMap.keySet().forEach(runner -> {
-            List<Player> others = runMap.keySet().stream().filter(Player::isOnline).toList();
-            if (others.isEmpty()) return;
+            if (runMap.isEmpty()) return;
+
+            List<Player> others = new ArrayList<>(runMap.keySet());
 
             long now = System.currentTimeMillis();
             if (now - lastSwitch.get() >= 6000) { // 3s
@@ -75,15 +79,15 @@ public final class Swiftrun extends JavaPlugin {
             }
 
             Player current = others.get(displayIdx.get());
+            RunData data = runMap.get(current);
+            if (data == null) return;
 
-            for (Player viewer : others) {
-                if (!viewer.isOnline()) continue;
+            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                boolean canSeeObjects = getProtocol(viewer) >= 773;
+                Component formattedCurrent = canSeeObjects ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
+                Component actionObj = canSeeObjects ? getSpriteComponent(data.boardActShow).appendSpace() : Component.empty();
 
-                RunData data = runMap.get(current);
-                if (data == null) continue;
-
-                Component formattedCurrent = getProtocol(viewer) >= 773 ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
-                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(Component.text(data.boardAct).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
+                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(actionObj).append(Component.text(data.boardAct).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
             }
         }), 1L, 20L);
 
@@ -103,9 +107,12 @@ public final class Swiftrun extends JavaPlugin {
 
         if (winner != null && runMap.containsKey(winner)) {
             for (Player p : Bukkit.getOnlinePlayers()) {
+                String title = p == winner ? "Victory!" : "Game Over!";
+                Sound sound = p == winner ? Sound.UI_TOAST_CHALLENGE_COMPLETE : Sound.ENTITY_ENDER_DRAGON_DEATH;
                 NamedTextColor color = (p.equals(winner) || !runMap.containsKey(p)) ? NamedTextColor.YELLOW : NamedTextColor.RED;
 
-                p.showTitle(Title.title(Component.text("Game Over!").color(color).decorate(TextDecoration.BOLD), Component.text("Winner: ").append(winner.displayName().color(color)).appendSpace().append(Component.text("(" + time + ")")), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(500))));
+                p.showTitle(Title.title(Component.text(title).color(color).decorate(TextDecoration.BOLD), Component.text("Winner: ").append(winner.displayName().color(color)).appendSpace().append(Component.text("(" + time + ")")), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(500))));
+                p.playSound(p, sound, SoundCategory.MASTER, 1, 1);
             }
         }
 
@@ -124,10 +131,10 @@ public final class Swiftrun extends JavaPlugin {
             if (winner == p) display = Component.empty().append(Component.text("✦ ").color(NamedTextColor.AQUA)).append(display).append(Component.text(" ✦").color(NamedTextColor.AQUA));
 
             Map<String, String> times = new LinkedHashMap<>();
-            times.put("Nether", getFormattedTime(data.netherTime));
-            times.put("Bastion", getFormattedTime(data.bastionTime));
-            times.put("Stronghold", getFormattedTime(data.strongholdTime));
-            times.put("End", getFormattedTime(data.endTime));
+            times.put("Nether", getFormattedTime(data.times.get("nether")));
+            times.put("Bastion", getFormattedTime(data.times.get("bastion")));
+            times.put("Stronghold", getFormattedTime(data.times.get("stronghold")));
+            times.put("End", getFormattedTime(data.times.get("end")));
 
             List<Component> hoverLines = times.entrySet().stream().map(entry -> Component.text(entry.getKey() + " @ ").color(NamedTextColor.WHITE).append(Component.text(entry.getValue()).color(NamedTextColor.YELLOW))).collect(Collectors.toList());
             hoverLines.add(Component.empty());
@@ -192,7 +199,10 @@ public final class Swiftrun extends JavaPlugin {
     }
 
     public void join(Player player) {
-        runMap.put(player, new RunData());
+        RunData data = new RunData();
+
+        data.locations.put("start", player.getLocation());
+        runMap.put(player, data);
     }
 
     public void leave(Player player) {
@@ -216,8 +226,8 @@ public final class Swiftrun extends JavaPlugin {
     public String getFormattedTime(long time) {
         if (time == 0) return "0:00";
 
-        long elapsed = System.currentTimeMillis() - time;
-        long totalSeconds = elapsed / 1000;
+        // long elapsed = System.currentTimeMillis() - time;
+        long totalSeconds = time / 1000;
 
         long hours = totalSeconds / 3600;
         long minutes = (totalSeconds % 3600) / 60;
@@ -228,8 +238,12 @@ public final class Swiftrun extends JavaPlugin {
     }
 
 
-    public void sendTipMsg(Player p, String msg) {
-        p.sendMessage(Component.empty().append(Component.text("[Debug]:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD)).appendSpace().append(MiniMessage.miniMessage().deserialize(msg)));
+    public void sendUsefulMsg(Player p, Component msg) {
+        p.sendMessage(Component.empty().append(RUN_USEFUL).appendSpace().append(msg));
+    }
+
+    public void spectatorsUsefulMsg(Component msg) {
+        Bukkit.getOnlinePlayers().stream().filter(player -> !runMap.containsKey(player)).forEach(p -> p.sendMessage(Component.empty().append(RUN_USEFUL).appendSpace().append(msg)));
     }
 
     public int getProtocol(Player player) {
@@ -244,5 +258,18 @@ public final class Swiftrun extends JavaPlugin {
 
     public void resetProtocol(Player player) {
         protocolCache.remove(player.getUniqueId());
+    }
+
+    public Component getSpriteComponent(String id) { // TODO
+        return Component.empty();
+    }
+
+    private static boolean isFolia() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 }

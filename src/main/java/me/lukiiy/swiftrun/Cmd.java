@@ -24,8 +24,9 @@ public class Cmd implements BasicCommand {
     public void execute(CommandSourceStack stack, String[] args) { // TODO: Add draw, seed change & forfeit
         CommandSender sender = stack.getSender();
         RunState state = Swiftrun.getInstance().getState();
+        String arg0 = args.length == 0 ? "" : args[0].toLowerCase();
 
-        switch (args[0].toLowerCase()) {
+        switch (arg0) {
             case "draw" -> {
                 if (!(sender instanceof Player p)) {
                     sender.sendMessage(INGAME_USAGE);
@@ -69,7 +70,7 @@ public class Cmd implements BasicCommand {
                 return;
             }
 
-            default -> sender.sendMessage(INVALID_ARG);
+            default -> {}
         }
 
         if (!sender.hasPermission("swiftrun.admin")) {
@@ -77,7 +78,7 @@ public class Cmd implements BasicCommand {
             return;
         }
 
-        switch (args[0].toLowerCase()) {
+        switch (arg0) {
             case "start" -> {
                 if (state != RunState.INACTIVE) {
                     sender.sendMessage(NO_RUN);
@@ -142,9 +143,9 @@ public class Cmd implements BasicCommand {
 
         if (!stack.getSender().hasPermission("swiftrun.admin")) return List.of();
 
-        if (args.length == 1) {
+        if (args.length == 0) {
             tab.add("start");
-            if (Swiftrun.getInstance().getState() == RunState.INACTIVE) {
+            if (Swiftrun.getInstance().getState() != RunState.INACTIVE) {
                 tab.add("stop");
                 tab.add("pause");
             }

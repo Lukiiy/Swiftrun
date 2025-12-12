@@ -1,25 +1,46 @@
 package me.lukiiy.swiftrun;
 
+import org.bukkit.Location;
+
+import java.util.HashMap;
+import java.util.Map;
+
 public class RunData {
-    public long netherTime = 0;
-    public long bastionTime = 0;
-    public long strongholdTime = 0;
-    public long endTime = 0;
+    public Map<String, Long> times = new HashMap<>();
+    public Map<String, Location> locations = new HashMap<>();
 
     public String boardAct = "Started";
+    public String boardActShow = "";
 
     public String serialize() {
-        return netherTime + ";" + bastionTime + ";" + strongholdTime + ";" + endTime + ";" + boardAct;
+        if (times.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+
+        for (Map.Entry<String, Long> entry : times.entrySet()) sb.append(entry.getKey()).append("=").append(entry.getValue()).append(";");
+        sb.append("bAct=").append(boardAct);
+        return sb.toString();
     }
 
     public void deserialize(String data) {
         if (data == null || data.isEmpty()) return;
-        String[] parts = data.split(";", -1);
 
-        try { netherTime = Long.parseLong(parts[0]); } catch (Exception ignored) {}
-        try { bastionTime = Long.parseLong(parts[1]); } catch (Exception ignored) {}
-        try { strongholdTime = Long.parseLong(parts[2]); } catch (Exception ignored) {}
-        try { endTime = Long.parseLong(parts[3]); } catch (Exception ignored) {}
-        if (parts.length > 4) boardAct = parts[4];
+        String[] parts = data.split(";", -1);
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+
+            String[] stuff = part.split("=", 2);
+            if (stuff.length != 2) continue;
+
+            String key = stuff[0];
+            String value = stuff[1];
+
+            if (key.equals("bAct")) {
+                boardAct = value;
+                continue;
+            }
+
+            try { times.put(key, Long.parseLong(value)); } catch (Exception ignored) {}
+        }
     }
 }
