@@ -45,7 +45,7 @@ public final class Swiftrun extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new Listen(), this);
         if (isFolia()) getServer().getPluginManager().registerEvents(new FoliaListen(), this);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("run", new Cmd()));
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("swiftrun", Set.of("run"), new Cmd()));
     }
 
     public static Swiftrun getInstance() {
@@ -133,6 +133,7 @@ public final class Swiftrun extends JavaPlugin {
             Map<String, String> times = new LinkedHashMap<>();
             times.put("Nether", getFormattedTime(data.times.get("nether")));
             times.put("Bastion", getFormattedTime(data.times.get("bastion")));
+            times.put("Fortress", getFormattedTime(data.times.get("fortress")));
             times.put("Stronghold", getFormattedTime(data.times.get("stronghold")));
             times.put("End", getFormattedTime(data.times.get("end")));
 
@@ -201,6 +202,11 @@ public final class Swiftrun extends JavaPlugin {
     public void join(Player player) {
         RunData data = new RunData();
 
+        data.times.put("nether", 0L);
+        data.times.put("bastion", 0L);
+        data.times.put("fortress", 0L);
+        data.times.put("stronghold", 0L);
+        data.times.put("end", 0L);
         data.locations.put("start", player.getLocation());
         runMap.put(player, data);
     }
@@ -226,8 +232,8 @@ public final class Swiftrun extends JavaPlugin {
     public String getFormattedTime(long time) {
         if (time == 0) return "0:00";
 
-        // long elapsed = System.currentTimeMillis() - time;
-        long totalSeconds = time / 1000;
+        long elapsed = System.currentTimeMillis() - time;
+        long totalSeconds = elapsed / 1000;
 
         long hours = totalSeconds / 3600;
         long minutes = (totalSeconds % 3600) / 60;
