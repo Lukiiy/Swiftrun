@@ -11,7 +11,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-public class TpCmd implements BasicCommand {
+public class TpCmd implements BasicCommand { // TODO
     @Override
     public void execute(CommandSourceStack commandSourceStack, String[] strings) {
         CommandSender sender = commandSourceStack.getSender();
