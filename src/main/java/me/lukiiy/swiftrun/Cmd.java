@@ -14,11 +14,11 @@ import java.util.Collection;
 import java.util.List;
 
 public class Cmd implements BasicCommand {
-    private static final Component INVALID_ARG = Component.text("Invalid subcommand.").color(NamedTextColor.RED);
-    private static final Component NO_RUN = Component.text("No active run!").color(NamedTextColor.RED);
-    private static final Component ONGOING_RUN = Component.text("There's an ongoing run!").color(NamedTextColor.RED);
-    private static final Component NOT_PARTICIPATING = Component.text("You are not in a run.").color(NamedTextColor.RED);
-    private static final Component INGAME_USAGE = Component.text("This subcommand can only be used in-game!").color(NamedTextColor.RED);
+    public static final Component INVALID_ARG = Component.text("Invalid subcommand.").color(NamedTextColor.RED);
+    public static final Component NO_RUN = Component.text("No active run!").color(NamedTextColor.RED);
+    public static final Component ONGOING_RUN = Component.text("There's an ongoing run!").color(NamedTextColor.RED);
+    public static final Component NOT_PARTICIPATING = Component.text("You are not in a run.").color(NamedTextColor.RED);
+    public static final Component INGAME_USAGE = Component.text("This subcommand can only be used in-game!").color(NamedTextColor.RED);
 
     @Override
     public void execute(CommandSourceStack stack, String[] args) { // TODO: Add draw, seed change & forfeit
@@ -81,7 +81,7 @@ public class Cmd implements BasicCommand {
         switch (arg0) {
             case "start" -> {
                 if (state != RunState.INACTIVE) {
-                    sender.sendMessage(NO_RUN);
+                    sender.sendMessage(ONGOING_RUN);
                     return;
                 }
 
@@ -130,7 +130,7 @@ public class Cmd implements BasicCommand {
                 }
 
                 Swiftrun.getInstance().togglePause();
-                sender.sendMessage(Component.text("Pausing...").color(NamedTextColor.YELLOW));
+                sender.sendMessage(Component.text(state == RunState.PAUSED ? "Pausing..." : "Resuming...").color(NamedTextColor.YELLOW));
             }
 
             default -> sender.sendMessage(INVALID_ARG);
@@ -143,12 +143,11 @@ public class Cmd implements BasicCommand {
 
         if (!stack.getSender().hasPermission("swiftrun.admin")) return List.of();
 
-        if (args.length == 0) {
-            tab.add("start");
+        if (args.length == 1) {
             if (Swiftrun.getInstance().getState() != RunState.INACTIVE) {
                 tab.add("stop");
                 tab.add("pause");
-            }
+            } else tab.add("start");
         }
 
         if (args.length > 1) {

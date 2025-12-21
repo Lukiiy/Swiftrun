@@ -12,6 +12,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.ShadowColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.title.Title;
 import org.bukkit.*;
@@ -36,6 +37,9 @@ public final class Swiftrun extends JavaPlugin {
 
     private long startTime = 0;
     private long voteTime = 15;
+    private long pauseTime = 0; // TODO
+    private long pauseLast = 0; // TODO
+    private long resumeLast = 0; // TODO
     private float votesPercentage = 1f;
 
     private static final Component RUN_USEFUL = Component.text("[Run]:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD);
@@ -82,12 +86,13 @@ public final class Swiftrun extends JavaPlugin {
             RunData data = runMap.get(current);
             if (data == null) return;
 
+            // Component pause = state == RunState.PAUSED ? Component.text(" ᴘᴀᴜѕᴇᴅ ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 0)).color(NamedTextColor.AQUA) : Component.empty();
+
             for (Player viewer : Bukkit.getOnlinePlayers()) {
                 boolean canSeeObjects = getProtocol(viewer) >= 773;
                 Component formattedCurrent = canSeeObjects ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
-                Component actionObj = canSeeObjects ? getSpriteComponent(data.boardActShow).appendSpace() : Component.empty();
 
-                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(actionObj).append(Component.text(data.boardAct).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
+                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(MiniMessage.miniMessage().deserialize(data.board).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
             }
         }), 1L, 20L);
 
@@ -123,25 +128,28 @@ public final class Swiftrun extends JavaPlugin {
             p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
 
             RunData data = runMap.get(p);
-            if (data == null) return;
+            if (data == null) continue;
 
             p.setGameMode(GameMode.SPECTATOR);
-
             Component display = Component.object(ObjectContents.playerHead(p.getUniqueId())).appendSpace().append(p.displayName());
-            if (winner == p) display = Component.empty().append(Component.text("✦ ").color(NamedTextColor.AQUA)).append(display).append(Component.text(" ✦").color(NamedTextColor.AQUA));
 
-            Map<String, String> times = new LinkedHashMap<>();
-            times.put("Nether", getFormattedTime(data.times.get("nether")));
-            times.put("Bastion", getFormattedTime(data.times.get("bastion")));
-            times.put("Fortress", getFormattedTime(data.times.get("fortress")));
-            times.put("Stronghold", getFormattedTime(data.times.get("stronghold")));
-            times.put("End", getFormattedTime(data.times.get("end")));
+            if (winner == p) display = Component.text("✦ ", NamedTextColor.AQUA).append(display).append(Component.text(" ✦", NamedTextColor.AQUA));
+            Component line = display;
 
-            List<Component> hoverLines = times.entrySet().stream().map(entry -> Component.text(entry.getKey() + " @ ").color(NamedTextColor.WHITE).append(Component.text(entry.getValue()).color(NamedTextColor.YELLOW))).collect(Collectors.toList());
-            hoverLines.add(Component.empty());
-            hoverLines.add(Component.text("Click to copy!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC));
+            for (Map.Entry<String, Long> timeEntry : data.times.entrySet()) {
+                String key = timeEntry.getKey();
+                if (!data.locations.containsKey(key)) continue;
 
-            standing.add(display.hoverEvent(HoverEvent.showText(Component.join(JoinConfiguration.separator(Component.newline()), hoverLines))).clickEvent(ClickEvent.copyToClipboard(times.entrySet().stream().map(e -> e.getKey() + " @ " + e.getValue()).collect(Collectors.joining("; ")))));
+                Location loc = data.locations.get(key);
+                String coords = loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ();
+                String formattedTime = getFormattedTime(timeEntry.getValue());
+                Component hover = Component.join(JoinConfiguration.separator(Component.newline()), Component.text("Time: ", NamedTextColor.WHITE).append(Component.text(formattedTime).color(NamedTextColor.YELLOW)), Component.empty(), Component.text("Click to teleport!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC));
+                Component tag = Component.text(" [" + key + "]", NamedTextColor.YELLOW).hoverEvent(HoverEvent.showText(hover)).clickEvent(ClickEvent.runCommand("/runtp " + p.getName() + " " + coords));
+
+                line = line.append(tag);
+            }
+
+            standing.add(line);
         }
 
         Bukkit.broadcast(Component.join(JoinConfiguration.builder().separator(Component.newline()).build(), standing).appendNewline());
@@ -229,20 +237,26 @@ public final class Swiftrun extends JavaPlugin {
         return startTime;
     }
 
+    public long getElapsedTime() {
+        if (state == RunState.PAUSED) return pauseLast - startTime - pauseTime;
+
+        return System.currentTimeMillis() - startTime - pauseTime;
+    }
+
     public String getFormattedTime(long time) {
         if (time == 0) return "0:00";
 
-        long elapsed = System.currentTimeMillis() - time;
-        long totalSeconds = elapsed / 1000;
+        long total = getElapsedTime() / 1000;
+        long hours = total / 3600;
+        long minutes = (total % 3600) / 60;
+        long seconds = total % 60;
 
-        long hours = totalSeconds / 3600;
-        long minutes = (totalSeconds % 3600) / 60;
-        long seconds = totalSeconds % 60;
-
-        if (hours > 0) return String.format("%d:%02d:%02d", hours, minutes, seconds);
-        else return String.format("%d:%02d", minutes, seconds);
+        if (hours > 0) return String.format("%d:%02d:%02d", hours, minutes, seconds); else return String.format("%d:%02d", minutes, seconds);
     }
 
+    public long getLastResume() {
+        return resumeLast;
+    }
 
     public void sendUsefulMsg(Player p, Component msg) {
         p.sendMessage(Component.empty().append(RUN_USEFUL).appendSpace().append(msg));
@@ -264,10 +278,6 @@ public final class Swiftrun extends JavaPlugin {
 
     public void resetProtocol(Player player) {
         protocolCache.remove(player.getUniqueId());
-    }
-
-    public Component getSpriteComponent(String id) { // TODO
-        return Component.empty();
     }
 
     private static boolean isFolia() {

@@ -9,8 +9,7 @@ public class RunData {
     public Map<String, Long> times = new HashMap<>();
     public Map<String, Location> locations = new HashMap<>();
 
-    public String boardAct = "Started";
-    public String boardActShow = "";
+    public String board = "Started";
 
     public String serialize() {
         if (times.isEmpty()) return "";
@@ -18,7 +17,8 @@ public class RunData {
         StringBuilder sb = new StringBuilder();
 
         for (Map.Entry<String, Long> entry : times.entrySet()) sb.append(entry.getKey()).append("=").append(entry.getValue()).append(";");
-        sb.append("bAct=").append(boardAct);
+        if (!board.isBlank()) sb.append("b=").append(board);
+
         return sb.toString();
     }
 
@@ -35,8 +35,8 @@ public class RunData {
             String key = stuff[0];
             String value = stuff[1];
 
-            if (key.equals("bAct")) {
-                boardAct = value;
+            if (key.equals("b")) {
+                board = value;
                 continue;
             }
 

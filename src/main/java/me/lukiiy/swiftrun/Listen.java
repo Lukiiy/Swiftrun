@@ -16,6 +16,7 @@ import org.bukkit.generator.structure.Structure;
 import org.bukkit.util.StructureSearchResult;
 
 import java.util.Comparator;
+import java.util.stream.IntStream;
 
 public class Listen implements Listener {
     @EventHandler
@@ -27,46 +28,39 @@ public class Listen implements Listener {
         if (data == null) return;
 
         String advKey = e.getAdvancement().getKey().getKey();
-        long now = System.currentTimeMillis() - Swiftrun.getInstance().getStartTime();
+        long now = Swiftrun.getInstance().getElapsedTime();
 
         switch (advKey) {
             case "story/enter_the_nether" -> { // We Need To Go Deeper
                 data.times.put("nether", now);
-                data.boardAct = "In Nether";
-                data.boardActShow = "blocks:netherrack";
+                data.board = "<sprite:blocks:block/netherrack> In Nether";
             }
 
             case "nether/find_bastion" -> { // Those Were the Days
                 data.times.put("bastion", now);
-                data.boardAct = "In Bastion";
-                data.boardActShow = "items:gold_ingot";
+                data.board = "<sprite:blocks:block/gold_block> In Bastion";
             }
 
             case "nether/find_fortress" -> { // A Terrible Fortress
                 data.times.put("fortress", now);
-                data.boardAct = "In Fortress";
-                data.boardActShow = "blocks:nether_bricks";
+                data.board = "<sprite:blocks:block/nether_bricks> In Fortress";
             }
 
             case "story/follow_ender_eye" -> { // Eye Spy
                 data.times.put("stronghold", now);
-                data.boardAct = "In Stronghold";
-                data.boardActShow = "items:ender_eye";
+                data.board = "<sprite:blocks:block/stone_bricks> In Stronghold";
             }
 
             case "story/enter_the_end" -> { // The End?
                 data.times.put("end", now);
-                data.boardAct = "In The End";
-                data.boardActShow = "blocks:end_stone";
+                data.board = "<sprite:blocks:block/end_stone> In The End";
             }
-
-            case "end/kill_dragon" -> data.boardActShow = "items:ender_dragon_spawn_egg";
         }
     }
 
     @EventHandler
     public void spawn(EntitySpawnEvent e) {
-        if (!(e.getEntity() instanceof EnderSignal signal) || signal.getEntitySpawnReason() != CreatureSpawnEvent.SpawnReason.DEFAULT) return;
+        if (Swiftrun.getInstance().getState() != RunState.ACTIVE || !(e.getEntity() instanceof EnderSignal signal) || signal.getEntitySpawnReason() != CreatureSpawnEvent.SpawnReason.DEFAULT) return;
 
         Location target = signal.getTargetLocation();
         if (target == null) return;
@@ -74,7 +68,7 @@ public class Listen implements Listener {
         Player thrower = signal.getLocation().getWorld().getPlayers().stream().min(Comparator.comparingDouble(p -> p.getLocation().distance(signal.getLocation()))).orElse(null);
         if (thrower == null) return;
 
-        Swiftrun.getInstance().sendUsefulMsg(thrower, Component.text("Throw registered! Make sure you record precise XYZ and angle!"));
+        Swiftrun.getInstance().sendUsefulMsg(thrower, Component.text("Throw registered! Make sure you precisely look at the eye."));
 
         signal.getScheduler().runAtFixedRate(Swiftrun.getInstance(), task -> {
             if (!signal.isValid()) {
@@ -96,7 +90,13 @@ public class Listen implements Listener {
                         return;
                     }
 
-                    Location loc = result.getLocation();
+                    int radius = 8;
+                    Location loc = IntStream.rangeClosed(-radius, radius).boxed()
+                            .flatMap(x -> IntStream.rangeClosed(-radius, radius).boxed().flatMap(y -> IntStream.rangeClosed(-radius, radius).mapToObj(z -> result.getLocation().clone().add(x, y, z))))
+                            .filter(searchLoc -> searchLoc.getBlock().getType().name().contains("STONE_BRICK"))
+                            .findFirst()
+                            .orElse(result.getLocation());
+
                     Swiftrun.getInstance().sendUsefulMsg(thrower, MiniMessage.miniMessage().deserialize("A stronghold is near: <green>" + loc.getBlockX() + " " + loc.getBlockZ() + "</green>; Nether coords: <green>" + Math.round(loc.getBlockX() / 8.0) + " " + Math.round(loc.getBlockZ() / 8.0) + "</green>"));
                 }, null, 20L);
 
@@ -118,6 +118,7 @@ public class Listen implements Listener {
         if (e.getPortalType() == PortalType.ENDER && loc.getWorld().getEnvironment() == World.Environment.THE_END) {
             Swiftrun.getInstance().stopRun(p);
             e.setCancelled(true);
+            p.setGameMode(GameMode.SPECTATOR);
         }
     }
 
@@ -142,16 +143,18 @@ public class Listen implements Listener {
 
     @EventHandler
     public void kick(PlayerKickEvent e) {
-        if (Swiftrun.getInstance().getState() == RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) e.setCancelled(true);
+        if (Swiftrun.getInstance().getState() == RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) {
+            long resume = Swiftrun.getInstance().getLastResume();
+            if (resume < 1 || System.currentTimeMillis() - resume < 1000) return;
+
+            e.setCancelled(true);
+        }
     }
 
     @EventHandler
     public void dragonPhase(EnderDragonChangePhaseEvent e) {
         if (Swiftrun.getInstance().getState() != RunState.ACTIVE || e.getCurrentPhase() != EnderDragon.Phase.FLY_TO_PORTAL) return;
 
-        Bukkit.getOnlinePlayers().forEach(p -> {
-            if (Swiftrun.getInstance().getRunMap().containsKey(p) || !p.hasPermission("swiftrun.dragon")) return;
-            p.sendMessage(Component.translatable("entity.minecraft.ender_dragon", "Ender Dragon").append(Component.text(" is now perching!")));
-        });
+        Swiftrun.getInstance().spectatorsUsefulMsg(Component.translatable("entity.minecraft.ender_dragon", "Ender Dragon").append(Component.text(" is now perching!")));
     }
 }
