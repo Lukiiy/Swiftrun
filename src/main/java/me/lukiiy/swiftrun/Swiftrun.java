@@ -58,9 +58,9 @@ public final class Swiftrun extends JavaPlugin {
 
     public void startRun(List<Player> players) {
         state = RunState.ACTIVE;
-        runMap.clear();
-
         startTime = System.currentTimeMillis();
+
+        runMap.clear();
 
         for (Player p : players) {
             if (p == null) continue;
