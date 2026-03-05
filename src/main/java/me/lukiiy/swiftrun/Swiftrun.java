@@ -49,7 +49,12 @@ public final class Swiftrun extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new Listen(), this);
         if (isFolia()) getServer().getPluginManager().registerEvents(new FoliaListen(), this);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("swiftrun", Set.of("run"), new Cmd()));
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            var registrar = event.registrar();
+
+            registrar.register("swiftrun", Set.of("run"), new Cmd());
+            registrar.register("swifttp", Set.of("runtp"), new TpCmd());
+        });
     }
 
     public static Swiftrun getInstance() {
@@ -136,15 +141,25 @@ public final class Swiftrun extends JavaPlugin {
             if (winner == p) display = Component.text("✦ ", NamedTextColor.AQUA).append(display).append(Component.text(" ✦", NamedTextColor.AQUA));
             Component line = display;
 
-            for (Map.Entry<String, Long> timeEntry : data.times.entrySet()) {
+            boolean firstTag = true;
+            for (Map.Entry<String, Long> timeEntry : data.getTimes().entrySet()) {
                 String key = timeEntry.getKey();
-                if (!data.locations.containsKey(key)) continue;
+                if (!data.getLocations().containsKey(key)) continue;
 
-                Location loc = data.locations.get(key);
-                String coords = loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ();
-                String formattedTime = getFormattedTime(timeEntry.getValue());
-                Component hover = Component.join(JoinConfiguration.separator(Component.newline()), Component.text("Time: ", NamedTextColor.WHITE).append(Component.text(formattedTime).color(NamedTextColor.YELLOW)), Component.empty(), Component.text("Click to teleport!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC));
-                Component tag = Component.text(" [" + key + "]", NamedTextColor.YELLOW).hoverEvent(HoverEvent.showText(hover)).clickEvent(ClickEvent.runCommand("/runtp " + p.getName() + " " + coords));
+                Location loc = data.getLocations().get(key);
+                if (loc.getWorld() == null) continue;
+
+                Component hover = Component.join(JoinConfiguration.separator(Component.newline()),
+                        Component.text("Time: ").append(Component.text(getFormattedTime(timeEntry.getValue())).color(NamedTextColor.YELLOW)),
+                        Component.text("Location: ").append(Component.text(loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ()).color(NamedTextColor.WHITE)),
+                        Component.empty(),
+                        Component.text("Click to teleport!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC)
+                );
+
+                Component tag = Component.text(" [" + key + "]", NamedTextColor.YELLOW).hoverEvent(HoverEvent.showText(hover)).clickEvent(ClickEvent.runCommand("/swifttp " + p.getName() + " " + key));
+
+                if (!firstTag) line = line.appendSpace();
+                firstTag = false;
 
                 line = line.append(tag);
             }
@@ -210,12 +225,7 @@ public final class Swiftrun extends JavaPlugin {
     public void join(Player player) {
         RunData data = new RunData();
 
-        data.times.put("nether", 0L);
-        data.times.put("bastion", 0L);
-        data.times.put("fortress", 0L);
-        data.times.put("stronghold", 0L);
-        data.times.put("end", 0L);
-        data.locations.put("start", player.getLocation());
+        data.setLocation("start", player.getLocation());
         runMap.put(player, data);
     }
 
@@ -251,7 +261,8 @@ public final class Swiftrun extends JavaPlugin {
         long minutes = (total % 3600) / 60;
         long seconds = total % 60;
 
-        if (hours > 0) return String.format("%d:%02d:%02d", hours, minutes, seconds); else return String.format("%d:%02d", minutes, seconds);
+        if (hours > 0) return String.format("%d:%02d:%02d", hours, minutes, seconds);
+        else return String.format("%d:%02d", minutes, seconds);
     }
 
     public long getLastResume() {

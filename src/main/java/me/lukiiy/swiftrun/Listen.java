@@ -32,27 +32,27 @@ public class Listen implements Listener {
 
         switch (advKey) {
             case "story/enter_the_nether" -> { // We Need To Go Deeper
-                data.times.put("nether", now);
+                data.setTime("nether", now);
                 data.board = "<sprite:blocks:block/netherrack> In Nether";
             }
 
             case "nether/find_bastion" -> { // Those Were the Days
-                data.times.put("bastion", now);
+                data.setTime("bastion", now);
                 data.board = "<sprite:blocks:block/gold_block> In Bastion";
             }
 
             case "nether/find_fortress" -> { // A Terrible Fortress
-                data.times.put("fortress", now);
+                data.setTime("fortress", now);
                 data.board = "<sprite:blocks:block/nether_bricks> In Fortress";
             }
 
             case "story/follow_ender_eye" -> { // Eye Spy
-                data.times.put("stronghold", now);
+                data.setTime("stronghold", now);
                 data.board = "<sprite:blocks:block/stone_bricks> In Stronghold";
             }
 
             case "story/enter_the_end" -> { // The End?
-                data.times.put("end", now);
+                data.setTime("end", now);
                 data.board = "<sprite:blocks:block/end_stone> In The End";
             }
         }
