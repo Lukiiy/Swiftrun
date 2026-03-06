@@ -10,7 +10,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 
 public class FoliaListen implements Listener { // TODO
     public void pauseCancel(Cancellable e) {
-        if (Swiftrun.getInstance().getState() == RunState.PAUSED) e.setCancelled(true);
+        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.PAUSED) e.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

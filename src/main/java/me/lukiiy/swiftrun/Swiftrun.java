@@ -3,7 +3,6 @@ package me.lukiiy.swiftrun;
 import com.viaversion.viaversion.api.Via;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
-import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -49,12 +48,7 @@ public final class Swiftrun extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new Listen(), this);
         if (isFolia()) getServer().getPluginManager().registerEvents(new FoliaListen(), this);
 
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-            var registrar = event.registrar();
-
-            registrar.register("swiftrun", Set.of("run"), new Cmd());
-            registrar.register("swifttp", Set.of("runtp"), new TpCmd());
-        });
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("swiftrun", Set.of("run"), new Cmd()));
     }
 
     public static Swiftrun getInstance() {
@@ -130,38 +124,34 @@ public final class Swiftrun extends JavaPlugin {
 
         List<Component> standing = new ArrayList<>();
         for (Player p : Bukkit.getOnlinePlayers()) {
-            p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
-
             RunData data = runMap.get(p);
             if (data == null) continue;
 
             p.setGameMode(GameMode.SPECTATOR);
             Component display = Component.object(ObjectContents.playerHead(p.getUniqueId())).appendSpace().append(p.displayName());
 
-            if (winner == p) display = Component.text("✦ ", NamedTextColor.AQUA).append(display).append(Component.text(" ✦", NamedTextColor.AQUA));
+            if (winner == p) display = Component.empty().append(Component.text("⭐ ").color(NamedTextColor.AQUA)).append(display);
             Component line = display;
 
-            boolean firstTag = true;
-            for (Map.Entry<String, Long> timeEntry : data.getTimes().entrySet()) {
-                String key = timeEntry.getKey();
+            for (Map.Entry<String, Long> entry : data.getTimes().entrySet()) {
+                String key = entry.getKey();
                 if (!data.getLocations().containsKey(key)) continue;
 
                 Location loc = data.getLocations().get(key);
                 if (loc.getWorld() == null) continue;
 
+                String coords = loc.blockX() + " " + loc.blockY() + " " + loc.blockZ();
+
                 Component hover = Component.join(JoinConfiguration.separator(Component.newline()),
-                        Component.text("Time: ").append(Component.text(getFormattedTime(timeEntry.getValue())).color(NamedTextColor.YELLOW)),
-                        Component.text("Location: ").append(Component.text(loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ()).color(NamedTextColor.WHITE)),
+                        Component.text(getFormattedTime(entry.getValue())),
+                        Component.text(coords),
                         Component.empty(),
-                        Component.text("Click to teleport!").color(NamedTextColor.AQUA).decorate(TextDecoration.ITALIC)
+                        Component.text("Click to teleport!").color(NamedTextColor.GREEN)
                 );
 
-                Component tag = Component.text(" [" + key + "]", NamedTextColor.YELLOW).hoverEvent(HoverEvent.showText(hover)).clickEvent(ClickEvent.runCommand("/swifttp " + p.getName() + " " + key));
+                Component tag = Component.text(" [" + key + "]", NamedTextColor.YELLOW).hoverEvent(HoverEvent.showText(hover)).clickEvent(ClickEvent.runCommand("/swiftrun quicktp " + loc.getWorld().getName() + ";" + coords.replace(' ', ';')));
 
-                if (!firstTag) line = line.appendSpace();
-                firstTag = false;
-
-                line = line.append(tag);
+                line = line.appendSpace().append(tag);
             }
 
             standing.add(line);
@@ -169,6 +159,13 @@ public final class Swiftrun extends JavaPlugin {
 
         Bukkit.broadcast(Component.join(JoinConfiguration.builder().separator(Component.newline()).build(), standing).appendNewline());
         runMap.clear();
+        state = RunState.INACTIVE;
+    }
+
+    public enum RunState {
+        ACTIVE,
+        PAUSED,
+        INACTIVE
     }
 
     public void togglePause() {

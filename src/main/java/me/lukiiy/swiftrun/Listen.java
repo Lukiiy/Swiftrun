@@ -21,7 +21,7 @@ import java.util.stream.IntStream;
 public class Listen implements Listener {
     @EventHandler
     public void advancement(PlayerAdvancementDoneEvent e) {
-        if (Swiftrun.getInstance().getState() == RunState.INACTIVE) return;
+        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.INACTIVE) return;
 
         Player p = e.getPlayer();
         RunData data = Swiftrun.getInstance().getRunMap().get(p);
@@ -29,30 +29,38 @@ public class Listen implements Listener {
 
         String advKey = e.getAdvancement().getKey().getKey();
         long now = Swiftrun.getInstance().getElapsedTime();
+        Location location = p.getLocation();
 
         switch (advKey) {
             case "story/enter_the_nether" -> { // We Need To Go Deeper
                 data.setTime("nether", now);
+                data.setLocation("nether", location);
                 data.board = "<sprite:blocks:block/netherrack> In Nether";
             }
 
             case "nether/find_bastion" -> { // Those Were the Days
                 data.setTime("bastion", now);
+                data.setLocation("bastion", location);
                 data.board = "<sprite:blocks:block/gold_block> In Bastion";
             }
 
             case "nether/find_fortress" -> { // A Terrible Fortress
                 data.setTime("fortress", now);
+                data.setLocation("fortress", location);
                 data.board = "<sprite:blocks:block/nether_bricks> In Fortress";
             }
 
             case "story/follow_ender_eye" -> { // Eye Spy
                 data.setTime("stronghold", now);
+                data.setLocation("stronghold", location);
                 data.board = "<sprite:blocks:block/stone_bricks> In Stronghold";
             }
 
+            case "end/kill_dragon" -> data.board = "<sprite:items:item/ender_dragon_spawn_egg> In The End";
+
             case "story/enter_the_end" -> { // The End?
                 data.setTime("end", now);
+                data.setLocation("end", location);
                 data.board = "<sprite:blocks:block/end_stone> In The End";
             }
         }
@@ -60,7 +68,7 @@ public class Listen implements Listener {
 
     @EventHandler
     public void spawn(EntitySpawnEvent e) {
-        if (Swiftrun.getInstance().getState() != RunState.ACTIVE || !(e.getEntity() instanceof EnderSignal signal) || signal.getEntitySpawnReason() != CreatureSpawnEvent.SpawnReason.DEFAULT) return;
+        if (Swiftrun.getInstance().getState() != Swiftrun.RunState.ACTIVE || !(e.getEntity() instanceof EnderSignal signal) || signal.getEntitySpawnReason() != CreatureSpawnEvent.SpawnReason.DEFAULT) return;
 
         Location target = signal.getTargetLocation();
         if (target == null) return;
@@ -112,11 +120,12 @@ public class Listen implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void portal(EntityPortalEnterEvent e) {
-        if (!(e.getEntity() instanceof Player p) || Swiftrun.getInstance().getState() == RunState.INACTIVE || !Swiftrun.getInstance().getRunMap().containsKey(p)) return;
+        if (!(e.getEntity() instanceof Player p) || Swiftrun.getInstance().getState() == Swiftrun.RunState.INACTIVE || !Swiftrun.getInstance().getRunMap().containsKey(p)) return;
         Location loc = e.getLocation();
 
         if (e.getPortalType() == PortalType.ENDER && loc.getWorld().getEnvironment() == World.Environment.THE_END) {
             Swiftrun.getInstance().stopRun(p);
+
             e.setCancelled(true);
             p.setGameMode(GameMode.SPECTATOR);
         }
@@ -124,26 +133,26 @@ public class Listen implements Listener {
 
     @EventHandler
     public void move(PlayerMoveEvent e) {
-        if (Swiftrun.getInstance().getState() == RunState.PAUSED) e.setCancelled(true);
+        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.PAUSED) e.setCancelled(true);
     }
 
     @EventHandler
     public void dmg(EntityDamageEvent e) {
-        RunState state = Swiftrun.getInstance().getState();
+        Swiftrun.RunState state = Swiftrun.getInstance().getState();
 
-        if (state == RunState.PAUSED) {
+        if (state == Swiftrun.RunState.PAUSED) {
             e.setCancelled(true);
             return;
         }
 
-        if (state == RunState.ACTIVE) {
+        if (state == Swiftrun.RunState.ACTIVE) {
             if (e.getEntity() instanceof EnderCrystal) Swiftrun.getInstance().spectatorsUsefulMsg(Component.text("A crystal has been destroyed!"));
         }
     }
 
     @EventHandler
     public void kick(PlayerKickEvent e) {
-        if (Swiftrun.getInstance().getState() == RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) {
+        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) {
             long resume = Swiftrun.getInstance().getLastResume();
             if (resume < 1 || System.currentTimeMillis() - resume < 1000) return;
 
@@ -153,7 +162,7 @@ public class Listen implements Listener {
 
     @EventHandler
     public void dragonPhase(EnderDragonChangePhaseEvent e) {
-        if (Swiftrun.getInstance().getState() != RunState.ACTIVE || e.getCurrentPhase() != EnderDragon.Phase.FLY_TO_PORTAL) return;
+        if (Swiftrun.getInstance().getState() != Swiftrun.RunState.ACTIVE || e.getCurrentPhase() != EnderDragon.Phase.FLY_TO_PORTAL) return;
 
         Swiftrun.getInstance().spectatorsUsefulMsg(Component.translatable("entity.minecraft.ender_dragon", "Ender Dragon").append(Component.text(" is now perching!")));
     }
