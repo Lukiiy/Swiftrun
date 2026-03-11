@@ -36,9 +36,9 @@ public final class Swiftrun extends JavaPlugin {
 
     private long startTime = 0;
     private long voteTime = 15;
-    private long pauseTime = 0; // TODO
-    private long pauseLast = 0; // TODO
-    private long resumeLast = 0; // TODO
+    private long pauseTime = 0;
+    private long pauseLast = 0;
+    private long resumeLast = 0;
     private float votesPercentage = 1f;
 
     private static final Component RUN_USEFUL = Component.text("[Run]:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD);
@@ -177,10 +177,13 @@ public final class Swiftrun extends JavaPlugin {
         if (state == RunState.ACTIVE) {
             state = RunState.PAUSED;
             title = "Paused";
+            pauseLast = System.currentTimeMillis();
             tick.setFrozen(true);
         } else {
             state = RunState.ACTIVE;
             title = "Resumed";
+            pauseTime += System.currentTimeMillis() - pauseLast;
+            resumeLast = System.currentTimeMillis();
             tick.setFrozen(false);
         }
 

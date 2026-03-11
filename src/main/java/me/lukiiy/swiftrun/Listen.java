@@ -152,7 +152,7 @@ public class Listen implements Listener {
 
     @EventHandler
     public void kick(PlayerKickEvent e) {
-        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.PAUSED && e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE) {
+        if (Swiftrun.getInstance().getState() == Swiftrun.RunState.PAUSED && (e.getCause() == PlayerKickEvent.Cause.FLYING_PLAYER || e.getCause() == PlayerKickEvent.Cause.FLYING_VEHICLE)) {
             long resume = Swiftrun.getInstance().getLastResume();
             if (resume < 1 || System.currentTimeMillis() - resume < 1000) return;
 
