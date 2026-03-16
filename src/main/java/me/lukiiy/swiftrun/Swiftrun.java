@@ -216,7 +216,7 @@ public final class Swiftrun extends JavaPlugin {
 
             if (voteTime <= 0) {
                 drawVoted.clear();
-                Bukkit.broadcast(Component.text("The draw vote has expired.").color(NamedTextColor.YELLOW));
+                Bukkit.broadcast(Component.text("The draw vote has expired.").color(NamedTextColor.RED));
                 task.cancel();
             }
         }, 1, 20);
