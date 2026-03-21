@@ -86,7 +86,8 @@ public class Listen implements Listener {
 
             if (signal.getVelocity().length() < 0.05 || signal.getLocation().distance(target) < 1.5) {
                 Location playerLoc = thrower.getLocation();
-                if (signal.getLocation().toVector().subtract(playerLoc.toVector()).normalize().dot(playerLoc.getDirection().normalize()) < 0.995) return;
+
+                if (signal.getLocation().toVector().subtract(playerLoc.toVector()).normalize().dot(playerLoc.getDirection().normalize()) < 0.75) return;
 
                 signal.customName(Component.text("Calculating..."));
                 signal.setCustomNameVisible(true);
