@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class Cmd implements BasicCommand {
     public static final Component INVALID_ARG = Component.text("Invalid subcommand.").color(NamedTextColor.RED);
@@ -118,14 +119,21 @@ public class Cmd implements BasicCommand {
                     return;
                 }
 
+                if (args[1].equals("*")) {
+                    Swiftrun.getInstance().startGlobalRun();
+
+                    sender.sendMessage(Component.text("Starting a new GLOBAL run...").color(NamedTextColor.GREEN));
+                    return;
+                }
+
                 List<Player> players = new ArrayList<>();
 
-                for (int i = 1; i < args.length; i++) {
+                IntStream.range(1, args.length).forEach(i -> {
                     Player p = Bukkit.getPlayer(args[i]);
 
                     if (p != null && p.isOnline()) players.add(p);
                     else sender.sendMessage(Component.text("Player not found: " + args[i]).color(NamedTextColor.RED));
-                }
+                });
 
                 if (players.isEmpty()) {
                     sender.sendMessage(Component.text("No valid players found!").color(NamedTextColor.RED));

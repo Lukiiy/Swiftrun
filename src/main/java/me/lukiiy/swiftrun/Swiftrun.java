@@ -34,6 +34,8 @@ public final class Swiftrun extends JavaPlugin {
     private ScheduledTask mainTask;
     private RunState state = RunState.INACTIVE;
 
+    private boolean globalTeam = false;
+
     private long startTime = 0;
     private long voteTime = 15;
     private long pauseTime = 0;
@@ -70,37 +72,50 @@ public final class Swiftrun extends JavaPlugin {
         AtomicInteger displayIdx = new AtomicInteger();
         AtomicLong lastSwitch = new AtomicLong();
 
-        mainTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> runMap.keySet().forEach(runner -> {
+        mainTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(this, task -> {
             if (runMap.isEmpty()) return;
 
             List<Player> others = new ArrayList<>(runMap.keySet());
 
-            long now = System.currentTimeMillis();
-            if (now - lastSwitch.get() >= 6000) { // 3s
-                displayIdx.set((displayIdx.get() + 1) % others.size());
-                lastSwitch.set(now);
+            if (!globalTeam) {
+                long now = System.currentTimeMillis();
+                if (now - lastSwitch.get() >= 6000) { // 3s
+                    displayIdx.set((displayIdx.get() + 1) % others.size());
+                    lastSwitch.set(now);
+                }
+
+                Player current = others.get(displayIdx.get());
+                RunData data = runMap.get(current);
+                if (data == null) return;
+
+                for (Player viewer : Bukkit.getOnlinePlayers()) {
+                    boolean canSeeObjects = getProtocol(viewer) >= 773;
+                    Component formattedCurrent = canSeeObjects ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
+
+                    viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(MiniMessage.miniMessage().deserialize(data.board).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
+                }
+            } else {
+                List<Component> parts = runMap.entrySet().stream().map(entry -> entry.getKey().displayName().append(Component.text(": ")).append(MiniMessage.miniMessage().deserialize(entry.getValue().board).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC))).collect(Collectors.toList());
+                Component bar = Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(Component.join(JoinConfiguration.separator(Component.text(" | ").color(NamedTextColor.GRAY)), parts)).append(Component.text(" •"));
+
+                for (Player viewer : Bukkit.getOnlinePlayers()) viewer.sendActionBar(bar);
             }
-
-            Player current = others.get(displayIdx.get());
-            RunData data = runMap.get(current);
-            if (data == null) return;
-
-            // Component pause = state == RunState.PAUSED ? Component.text(" ᴘᴀᴜѕᴇᴅ ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 0)).color(NamedTextColor.AQUA) : Component.empty();
-
-            for (Player viewer : Bukkit.getOnlinePlayers()) {
-                boolean canSeeObjects = getProtocol(viewer) >= 773;
-                Component formattedCurrent = canSeeObjects ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
-
-                viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(MiniMessage.miniMessage().deserialize(data.board).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
-            }
-        }), 1L, 20L);
+        }, 1L, 20L);
 
         Bukkit.broadcast(Component.text("The run has started!").color(NamedTextColor.YELLOW));
+    }
+
+    public void startGlobalRun() {
+        globalTeam = true;
+
+        startRun(Bukkit.getOnlinePlayers().stream().filter(p -> p.getGameMode() == GameMode.SURVIVAL).collect(Collectors.toList()));
     }
 
     public void stopRun(Player winner) {
         if (state == RunState.INACTIVE || mainTask.isCancelled()) return;
         if (state == RunState.PAUSED) togglePause();
+
+        globalTeam = false;
 
         String time = getFormattedTime(startTime);
 
