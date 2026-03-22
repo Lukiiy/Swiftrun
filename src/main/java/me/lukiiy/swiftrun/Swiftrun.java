@@ -46,6 +46,7 @@ public final class Swiftrun extends JavaPlugin {
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new Listen(), this);
+
         if (isFolia()) getServer().getPluginManager().registerEvents(new FoliaListen(), this);
 
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> event.registrar().register("swiftrun", Set.of("run"), new Cmd()));
@@ -88,8 +89,7 @@ public final class Swiftrun extends JavaPlugin {
             // Component pause = state == RunState.PAUSED ? Component.text(" ᴘᴀᴜѕᴇᴅ ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 0)).color(NamedTextColor.AQUA) : Component.empty();
 
             for (Player viewer : Bukkit.getOnlinePlayers()) {
-                boolean canSeeObjects = getProtocol(viewer) >= 773;
-                Component formattedCurrent = canSeeObjects ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
+                Component formattedCurrent = getProtocol(viewer) >= 773 ? Component.object(ObjectContents.playerHead(current.getUniqueId())).appendSpace().append(current.displayName()) : current.displayName();
 
                 viewer.sendActionBar(Component.text("• " + getFormattedTime(startTime) + " • ").shadowColor(ShadowColor.shadowColor(0, 0, 0, 255)).append(formattedCurrent).append(Component.text(": ")).append(MiniMessage.miniMessage().deserialize(data.board).color(TextColor.color(0xD0D0D0)).decorate(TextDecoration.ITALIC)).append(Component.text(" •")));
             }
@@ -111,9 +111,17 @@ public final class Swiftrun extends JavaPlugin {
 
         if (winner != null && runMap.containsKey(winner)) {
             for (Player p : Bukkit.getOnlinePlayers()) {
-                String title = p == winner ? "Victory!" : "Game Over!";
-                Sound sound = p == winner ? Sound.UI_TOAST_CHALLENGE_COMPLETE : Sound.ENTITY_ENDER_DRAGON_DEATH;
-                NamedTextColor color = (p.equals(winner) || !runMap.containsKey(p)) ? NamedTextColor.YELLOW : NamedTextColor.RED;
+                String title = "Game Over!";
+                Sound sound = Sound.ENTITY_ENDER_DRAGON_DEATH;
+                TextColor color = NamedTextColor.RED;
+
+                if (p == winner) {
+                    title = "Victory!";
+                    sound = Sound.UI_TOAST_CHALLENGE_COMPLETE;
+                    color = NamedTextColor.GREEN;
+                }
+
+                if (!runMap.containsKey(p)) color = NamedTextColor.YELLOW;
 
                 p.showTitle(Title.title(Component.text(title).color(color).decorate(TextDecoration.BOLD), Component.text("Winner: ").append(winner.displayName().color(color)).appendSpace().append(Component.text("(" + time + ")")), Title.Times.times(Duration.ofMillis(500), Duration.ofSeconds(4), Duration.ofMillis(500))));
                 p.playSound(p, sound, SoundCategory.MASTER, 1, 1);
@@ -123,6 +131,7 @@ public final class Swiftrun extends JavaPlugin {
         Bukkit.broadcast(Component.empty().appendNewline().append(Component.text("ʜᴏᴠᴇʀ ᴛʜᴇ ᴘʟᴀʏᴇʀѕ ᴛᴏ ᴄʜᴇᴄᴋ ᴛʜᴇɪʀ ᴛɪᴍᴇѕ").color(NamedTextColor.YELLOW)));
 
         List<Component> standing = new ArrayList<>();
+
         for (Player p : Bukkit.getOnlinePlayers()) {
             RunData data = runMap.get(p);
             if (data == null) continue;
