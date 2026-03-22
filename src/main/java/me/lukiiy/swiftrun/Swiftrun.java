@@ -30,12 +30,12 @@ public final class Swiftrun extends JavaPlugin {
     private final Map<UUID, Integer> protocolCache = new ConcurrentHashMap<>();
     private final Set<Player> drawVoted = new HashSet<>();
 
-    private ScheduledTask voteTask;
+    private ScheduledTask voteTask = null;
     private ScheduledTask mainTask;
     private RunState state = RunState.INACTIVE;
 
     private long startTime = 0;
-    private long voteTime = 15;
+    private long voteTime = 30;
     private long pauseTime = 0;
     private long pauseLast = 0;
     private long resumeLast = 0;
@@ -210,11 +210,11 @@ public final class Swiftrun extends JavaPlugin {
 
         Set<Player> participants = runMap.keySet().stream().filter(Player::isOnline).collect(Collectors.toSet());
         if (!participants.isEmpty()) {
-            long matches = participants.stream().filter(drawVoted::contains).count();
-            double ratio = (double) matches / participants.size();
+            double ratio = (double) participants.stream().filter(drawVoted::contains).count() / participants.size();
 
             if (ratio >= votesPercentage) {
                 Bukkit.broadcast(Component.text("Enough participants have voted for a draw.").color(NamedTextColor.RED));
+
                 stopRun(null);
                 return;
             }
@@ -225,8 +225,11 @@ public final class Swiftrun extends JavaPlugin {
 
             if (voteTime <= 0) {
                 drawVoted.clear();
+
                 Bukkit.broadcast(Component.text("The draw vote has expired.").color(NamedTextColor.RED));
                 task.cancel();
+
+                voteTime = 30;
             }
         }, 1, 20);
     }
